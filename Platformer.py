@@ -279,17 +279,17 @@ class Player():
             self.images_jump_right.append(img_right)
             self.images_jump_left.append(img_left)
 
-        # load in falling image setup
+        # load in falling image set
         self.images_fall_right = []
         self.images_fall_left = []
         self.index_fall = 0
         self.counter_fall = 0
-        for num in range(0, 4):
-            img_right = pygame.image.load(f'img/player/adventurer-jump-0{num}.png')
+        for num in range(0, 2):
+            img_right = pygame.image.load(f'img/player/adventurer-fall-0{num}.png')
             img_right = pygame.transform.scale(img_right, (68,50))
             img_left = pygame.transform.flip(img_right, True, False)
-            self.images_jump_right.append(img_right)
-            self.images_jump_left.append(img_left)
+            self.images_fall_right.append(img_right)
+            self.images_fall_left.append(img_left)
 
         self.img_ghost = pygame.image.load('img/ghost.png')
         self.img_ghost = pygame.transform.scale(self.img_ghost, (40, 50))
@@ -301,7 +301,7 @@ class Player():
         self.rect = pygame.Rect(self.rect.x + 20, self.rect.y + 10, 68-2*20, 50-10)
         self.vel_y = 0
         self.jumped = False
-        self.in_air = True
+        self.in_air = False
         self.direction = 0
 
     def update(self, game_over):
@@ -310,6 +310,8 @@ class Player():
         walk_cooldown = 4
         idle_cooldown = 10
         col_thresh = 16
+        fall_cooldown = 5
+        jump_cooldown = 5
 
         if game_over == 0:
             # get keypresses
@@ -317,9 +319,8 @@ class Player():
             if key[pygame.K_SPACE] and self.jumped == False and self.in_air == False:
                 self.vel_y = -13
                 self.jumped = True
-                self.on_platform = False
+                #self.on_platform = False
                 jump_fx.play()
-                #TODO jump animation
             if key[pygame.K_SPACE] == False:
                 self.jumped = False
             if key[pygame.K_LEFT]:
@@ -332,18 +333,19 @@ class Player():
                 self.direction = 1
 
             # walk animation
-            if self.counter_x > walk_cooldown:
-                self.counter_x = 0
-                self.index_x += 1
-                if self.index_x >= len(self.images_right):
-                    self.index_x = 0
-                if self.direction == -1:
-                    self.img = self.images_left[self.index_x]
-                else:
-                    self.img = self.images_right[self.index_x]
+            if dx != 0 and self.in_air == False:
+                if self.counter_x > walk_cooldown:
+                    self.counter_x = 0
+                    self.index_x += 1
+                    if self.index_x >= len(self.images_right):
+                        self.index_x = 0
+                    if self.direction == -1:
+                        self.img = self.images_left[self.index_x]
+                    else:
+                        self.img = self.images_right[self.index_x]
 
             # idle animation
-            if dx == 0:
+            if dx == 0 and self.in_air == False:
                 self.counter_right = 0
                 self.counter_left = 0
                 self.index_x = 0
@@ -352,17 +354,30 @@ class Player():
                 self.counter_idle = 0
                 self.index_idle += 1
                 if self.index_idle >= len(self.images_idle_right):
-                    self.index_idle = -1
+                    self.index_idle = 0
                 if self.direction == -1:
                     self.img = self.images_idle_left[self.index_idle]
                 else:
                     self.img = self.images_idle_right[self.index_idle]
 
+            # falling animation
+            if self.in_air and self.vel_y >= 0:
+                self.counter_fall += 1
+                if self.counter_fall > fall_cooldown:
+                    self.counter_fall = 0
+                    self.index_fall += 1
+                    if self.index_fall >= len(self.images_fall_right):
+                        self.index_fall = 0
+                    if self.direction == -1:
+                        self.img = self.images_fall_left[self.index_fall]
+                    else:
+                        self.img = self.images_fall_right[self.index_fall]
+
             # add gravity
             self.vel_y += 0.8
             if self.vel_y >= 8:
                 self.vel_y = 8
-            dy += int(self.vel_y)
+            dy += int(round(self.vel_y))
 
             # check for collision
             self.in_air = True
