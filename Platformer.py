@@ -30,14 +30,14 @@ red = (255, 0, 0)
 tile_size = 40
 game_over = 0
 main_menu = True
-level = 1
+level = 4
 max_levels = 7
 score = 0
 
 # load sounds
 pygame.mixer.music.load('img/music.wav')
 pygame.mixer.music.play(-1, 0.0, 5000)
-pygame.mixer.music.set_volume(0.5)
+pygame.mixer.music.set_volume(0.2)
 coin_fx = pygame.mixer.Sound('img/coin.wav')
 coin_fx.set_volume(0.5)
 jump_fx = pygame.mixer.Sound('img/jump.wav')
@@ -55,6 +55,16 @@ start_img = pygame.image.load('img/start_btn.png')
 exit_img = pygame.image.load('img/exit_btn.png')
 level_exit_img = pygame.image.load('img/exit.png')
 coin_img = pygame.image.load('img/coin.png')
+
+# load in slime image set
+slime_images_right = []
+slime_images_left = []
+for num in range(0, 4):
+    img_right = pygame.image.load(f'img/enemies/slime/slime-move-{num}.png')
+    img_right = pygame.transform.scale(img_right, (tile_size, tile_size))
+    img_left = pygame.transform.flip(img_right, True, False)
+    slime_images_right.append(img_right)
+    slime_images_left.append(img_left)
 
 def draw_text(text, font, text_col, x, y):
     img = font.render(text, True, text_col)
@@ -160,15 +170,29 @@ class World():
 class Enemy_1(pygame.sprite.Sprite):
     def __init__(self, x, y):
         pygame.sprite.Sprite.__init__(self)
-        self.image = enemy_1_img
-        self.image = pygame.transform.scale(self.image, (30, 30))
+        self.image_set_right = slime_images_right
+        self.image_set_left = slime_images_left
+        self.image = slime_images_right[0]
         self.rect = self.image.get_rect()
         self.rect.x = x
-        self.rect.y = y + 10
+        self.rect.y = y
         self.move_direction = 1
         self.move_counter = 0
+        self.counter = 0
+        self.index = 0
 
     def update(self):
+        anim_cooldown = 10
+        self.counter += 1
+        if self.counter > anim_cooldown:
+            self.index += 1
+            self.counter = 0
+            if self.index >= len(self.image_set_right):
+                self.index = 0
+            if self.move_direction == -1:
+                self.image = self.image_set_right[self.index]
+            else:
+                self.image = self.image_set_left[self.index]
         self.rect.x += self.move_direction
         self.move_counter += 1
         if self.move_counter > 50:
@@ -291,6 +315,18 @@ class Player():
             self.images_fall_right.append(img_right)
             self.images_fall_left.append(img_left)
 
+        # load in attack image set
+        self.images_attack_right = []
+        self.images_attack_left = []
+        self.index_attack = 0
+        self.counter_attack = 0
+        for num in range(0, 4):
+            img_right = pygame.image.load(f'img/player/adventurer-attack-0{num}.png')
+            img_right = pygame.transform.scale(img_right, (68,50))
+            img_left = pygame.transform.flip(img_right, True, False)
+            self.images_attack_right.append(img_right)
+            self.images_attack_left.append(img_left)
+
         self.img_ghost = pygame.image.load('img/ghost.png')
         self.img_ghost = pygame.transform.scale(self.img_ghost, (40, 50))
         self.img = self.images_idle_right[self.index_idle]
@@ -303,6 +339,7 @@ class Player():
         self.jumped = False
         self.in_air = False
         self.direction = 0
+        self.attacked = False
 
     def update(self, game_over):
         dx = 0
@@ -310,11 +347,12 @@ class Player():
         walk_cooldown = 4
         idle_cooldown = 10
         col_thresh = 16
-        fall_cooldown = 5
+        fall_cooldown = 10
         jump_cooldown = 5
 
         if game_over == 0:
             # get keypresses
+            #pygame.event.get()
             key = pygame.key.get_pressed()
             if key[pygame.K_SPACE] and self.jumped == False and self.in_air == False:
                 self.vel_y = -13
@@ -331,6 +369,12 @@ class Player():
                 dx += 3
                 self.counter_x += 1
                 self.direction = 1
+            if key[pygame.K_e] and self.attacked == False:
+                print("attack")
+                self.attack()
+                self.attacked = True
+            if not key[pygame.K_e]:
+                self.attacked = False
 
             # walk animation
             if dx != 0 and self.in_air == False:
@@ -346,8 +390,7 @@ class Player():
 
             # idle animation
             if dx == 0 and self.in_air == False:
-                self.counter_right = 0
-                self.counter_left = 0
+                self.counter_x = 0
                 self.index_x = 0
                 self.counter_idle += 1
             if self.counter_idle > idle_cooldown:
@@ -372,6 +415,19 @@ class Player():
                         self.img = self.images_fall_left[self.index_fall]
                     else:
                         self.img = self.images_fall_right[self.index_fall]
+
+            # jumping animation
+            if self.in_air and self.vel_y < 0:
+                self.counter_jump += 1
+                if self.counter_jump > jump_cooldown:
+                    self.counter_jump = 0
+                    self.index_jump += 1
+                    if self.index_jump >= len(self.images_jump_right):
+                        self.index_jump = 3
+                    if self.direction == -1:
+                        self.img = self.images_jump_left[self.index_jump]
+                    else:
+                        self.img = self.images_jump_right[self.index_jump]
 
             # add gravity
             self.vel_y += 0.8
@@ -447,6 +503,17 @@ class Player():
         #pygame.draw.rect(screen, (255,255,255), self.rect, 2)
 
         return game_over
+
+    def attack(self):
+        # create attack hitbox for collision detection based on player rect and direction
+        if self.direction == 1:
+            self.attack_rect = pygame.Rect(self.rect.right, self.rect.top, 20, self.rect.height)
+        else:
+            self.attack_rect = pygame.Rect(self.rect.left, self.rect.top, -20, self.rect.height)
+
+        for enemy in enemy_1_group:
+            if enemy.rect.colliderect(self.attack_rect):
+                enemy.kill()
 
 # initial loading of player and sprite groups
 player = Player(80 - 20, screen_height - 90)
