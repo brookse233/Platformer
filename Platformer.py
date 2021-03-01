@@ -30,7 +30,7 @@ red = (255, 0, 0)
 tile_size = 40
 game_over = 0
 main_menu = True
-level = 4
+level = 1
 max_levels = 7
 score = 0
 
@@ -44,6 +44,8 @@ jump_fx = pygame.mixer.Sound('img/jump.wav')
 jump_fx.set_volume(0.5)
 game_over_fx = pygame.mixer.Sound('img/game_over.wav')
 game_over_fx.set_volume(0.5)
+attack_fx = pygame.mixer.Sound('img/attack.wav')
+attack_fx.set_volume(0.5)
 
 # load images
 bg_img = pygame.image.load('img/background.png')
@@ -173,9 +175,10 @@ class Enemy_1(pygame.sprite.Sprite):
         self.image_set_right = slime_images_right
         self.image_set_left = slime_images_left
         self.image = slime_images_right[0]
-        self.rect = self.image.get_rect()
+        self.image_rect = self.image.get_rect()
+        self.rect = pygame.Rect(self.image_rect.left + 5, self.image_rect.top + 20, self.image_rect.width - 10, self.image_rect.height - 20)
         self.rect.x = x
-        self.rect.y = y
+        self.rect.y = y + 20
         self.move_direction = 1
         self.move_counter = 0
         self.counter = 0
@@ -198,6 +201,7 @@ class Enemy_1(pygame.sprite.Sprite):
         if self.move_counter > 50:
             self.move_direction *= -1
             self.move_counter = -50
+        self.image_rect = pygame.Rect(self.rect.left - 5, self.rect.top - 20, self.rect.width + 10, self.rect.height + 20)
 
 class Lava(pygame.sprite.Sprite):
     def __init__(self, x, y):
@@ -318,10 +322,10 @@ class Player():
         # load in attack image set
         self.images_attack_right = []
         self.images_attack_left = []
-        self.index_attack = 0
-        self.counter_attack = 0
-        for num in range(0, 4):
-            img_right = pygame.image.load(f'img/player/adventurer-attack-0{num}.png')
+        self.attack_index = 0
+        self.attack_counter = 0
+        for num in range(0, 6):
+            img_right = pygame.image.load(f'img/player/adventurer-attack2-0{num}.png')
             img_right = pygame.transform.scale(img_right, (68,50))
             img_left = pygame.transform.flip(img_right, True, False)
             self.images_attack_right.append(img_right)
@@ -334,20 +338,21 @@ class Player():
         self.rect.x = x
         self.rect.y = y
         self.image_rect = self.rect
-        self.rect = pygame.Rect(self.rect.x + 20, self.rect.y + 10, 68-2*20, 50-10)
+        self.rect = pygame.Rect(self.rect.x + 24, self.rect.y + 10, 68-2*24, 50-10)
         self.vel_y = 0
         self.jumped = False
         self.in_air = False
-        self.direction = 0
+        self.direction = 1
         self.attacked = False
+        self.attacking = False
 
     def update(self, game_over):
         dx = 0
         dy = 0
         walk_cooldown = 4
-        idle_cooldown = 10
+        idle_cooldown = 13
         col_thresh = 16
-        fall_cooldown = 10
+        fall_cooldown = 5
         jump_cooldown = 5
 
         if game_over == 0:
@@ -370,14 +375,16 @@ class Player():
                 self.counter_x += 1
                 self.direction = 1
             if key[pygame.K_e] and self.attacked == False:
-                print("attack")
                 self.attack()
                 self.attacked = True
+                self.attacking = True
             if not key[pygame.K_e]:
                 self.attacked = False
 
             # walk animation
-            if dx != 0 and self.in_air == False:
+            if dx != 0 and not self.in_air and not self.attacking:
+                self.index_idle = 0
+                self.attack_index = 0
                 if self.counter_x > walk_cooldown:
                     self.counter_x = 0
                     self.index_x += 1
@@ -389,9 +396,10 @@ class Player():
                         self.img = self.images_right[self.index_x]
 
             # idle animation
-            if dx == 0 and self.in_air == False:
+            if dx == 0 and not self.in_air and not self.attacking:
                 self.counter_x = 0
                 self.index_x = 0
+                self.attack_index = 0
                 self.counter_idle += 1
             if self.counter_idle > idle_cooldown:
                 self.counter_idle = 0
@@ -428,6 +436,10 @@ class Player():
                         self.img = self.images_jump_left[self.index_jump]
                     else:
                         self.img = self.images_jump_right[self.index_jump]
+
+            # call attack animation
+            if self.attacking:
+                self.attack()
 
             # add gravity
             self.vel_y += 0.8
@@ -496,24 +508,45 @@ class Player():
             self.rect.y -= 4
 
         # create an enlarged copy of the hitbox rect for use in the blit function below
-        self.image_rect = pygame.Rect(self.rect.left - 20, self.rect.top -10, self.rect.right + 20, self.rect.y)
+        self.image_rect = pygame.Rect(self.rect.left - 24, self.rect.top -10, self.rect.right + 24, self.rect.y)
 
         # draw player onto screen
         screen.blit(self.img, self.image_rect)
-        #pygame.draw.rect(screen, (255,255,255), self.rect, 2)
+        # pygame.draw.rect(screen, (255,255,255), self.rect, 2)
+        # pygame.draw.rect(screen, (255,255,255), (self.rect.right, self.rect.top, 19, self.rect.height), 2)
 
         return game_over
 
     def attack(self):
-        # create attack hitbox for collision detection based on player rect and direction
-        if self.direction == 1:
-            self.attack_rect = pygame.Rect(self.rect.right, self.rect.top, 20, self.rect.height)
-        else:
-            self.attack_rect = pygame.Rect(self.rect.left, self.rect.top, -20, self.rect.height)
+        attack_cooldown = 4
+        self.attacking = True
 
-        for enemy in enemy_1_group:
-            if enemy.rect.colliderect(self.attack_rect):
-                enemy.kill()
+        # attack animation
+        self.attack_counter += 1
+        self.counter_x = 0
+        self.counter_idle = 0
+        if self.attack_counter > attack_cooldown:
+            self.attack_counter = 0
+            self.attack_index += 1
+            if self.attack_index >= len(self.images_attack_right):
+                self.attacking = False
+                self.attack_index = 5
+            if self.direction == 1:
+                self.img = self.images_attack_right[self.attack_index]
+            else:
+                self.img = self.images_attack_left[self.attack_index]
+
+        # create attack hitbox for collision detection based on player rect and direction
+        if self.attack_index == 3 and self.attack_counter == 0:
+            attack_fx.play()
+            if self.direction == 1:
+                self.attack_rect = pygame.Rect(self.rect.right, self.rect.top, 19, self.rect.height)
+            else:
+                self.attack_rect = pygame.Rect(self.rect.left, self.rect.top, -19, self.rect.height)
+
+            for enemy in enemy_1_group:
+                if enemy.rect.colliderect(self.attack_rect):
+                    enemy.kill()
 
 # initial loading of player and sprite groups
 player = Player(80 - 20, screen_height - 90)
@@ -557,6 +590,14 @@ while run:
     else:
         world.draw()
 
+        # draw sprite classes
+        lava_group.draw(screen)
+        platform_group.draw(screen)
+        exit_group.draw(screen)
+        coin_group.draw(screen)
+        for sprite in enemy_1_group:
+            screen.blit(sprite.image, sprite.image_rect)
+
         # if still alive
         if game_over == 0:
             enemy_1_group.update()
@@ -569,14 +610,6 @@ while run:
                 coin_fx.play()
                 score += 1
             draw_text(str(score), font_score, white, 33, 8)
-
-        # player has died
-        if game_over == -1:
-            if restart_button.draw():
-                player.restart(80 - 20, screen_height - 90)
-                game_over = 0
-            if exit_button.draw():
-                run = False
 
         # at level completion
         if game_over == 1:
@@ -594,12 +627,14 @@ while run:
                     game_over = 0
                     score = 0
 
-        # draw sprite classes
-        enemy_1_group.draw(screen)
-        lava_group.draw(screen)
-        platform_group.draw(screen)
-        exit_group.draw(screen)
-        coin_group.draw(screen)
+        # player has died
+        if game_over == -1:
+            if restart_button.draw():
+                player.restart(80 - 20, screen_height - 90)
+                world = reset_level(level)
+                game_over = 0
+            if exit_button.draw():
+                run = False
 
         # update player and check if died or completed level
         game_over = player.update(game_over)
