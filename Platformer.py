@@ -73,7 +73,7 @@ def draw_text(text, font, text_col, x, y):
     screen.blit(img, (x, y))
 
 def draw_grid():
-    for line in range(0, (screen_width // tile_size)):
+    for line in range(screen_width // tile_size):
         pygame.draw.line(screen, (255, 255, 255), (0, line * tile_size), (screen_width, line * tile_size))
         pygame.draw.line(screen, (255, 255, 255), (line * tile_size, 0), (line * tile_size, screen_height))
 
@@ -87,9 +87,7 @@ def reset_level(level):
     if path.exists(f'level{level}_data'):
         pickle_in = open(f'level{level}_data', 'rb')
         world_data = pickle.load(pickle_in)
-    world = World(world_data)
-
-    return world
+    return World(world_data)
 
 class Button():
     def __init__(self, x, y, image):
@@ -107,10 +105,13 @@ class Button():
         pos = pygame.mouse.get_pos()
 
         # check mouseover and clicked conditions
-        if self.rect.collidepoint(pos):
-            if pygame.mouse.get_pressed()[0] == 1 and self.clicked == False:
-                action = True
-                self.clicked = True
+        if (
+            self.rect.collidepoint(pos)
+            and pygame.mouse.get_pressed()[0] == 1
+            and self.clicked == False
+        ):
+            action = True
+            self.clicked = True
 
         if pygame.mouse.get_pressed()[0] == 0:
             self.clicked = False
